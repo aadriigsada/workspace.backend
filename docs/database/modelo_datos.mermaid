@@ -1,0 +1,275 @@
+erDiagram
+    Organizacion {
+        UUID id PK
+        VARCHAR(150) nombre
+        VARCHAR(255) url_logotipo "nullable"
+        VARCHAR(50) zona_horaria "ej. Europe/Madrid"
+        VARCHAR(10) idioma "ej. es"
+        TIMESTAMP creado_en
+    }
+
+    Usuario {
+        UUID id PK
+        VARCHAR(255) correo UK
+        ENUM proveedor_oauth "GOOGLE, MICROSOFT"
+        VARCHAR(255) id_oauth "UK compuesto con proveedor_oauth"
+        VARCHAR(100) nombre
+        VARCHAR(255) url_avatar "nullable"
+        VARCHAR(160) mensaje_estado "nullable"
+        ENUM estado "ACTIVO, INACTIVO"
+        ENUM rol "ADMINISTRADOR, MANAGER, USUARIO"
+        BOOLEAN modo_no_molestar "default false"
+        UUID id_organizacion FK "RESTRICT"
+        TIMESTAMP creado_en
+    }
+
+    Invitacion {
+        UUID id PK
+        CHAR(64) token_hash UK "SHA-256 del token"
+        VARCHAR(255) correo "nullable, NULL = enlace generico"
+        ENUM rol_destino "ADMINISTRADOR, MANAGER, USUARIO"
+        UUID id_organizacion FK "CASCADE"
+        UUID id_invitador FK "RESTRICT"
+        UUID id_usuario_registrado FK "nullable, SET NULL"
+        TIMESTAMP creado_en
+        TIMESTAMP expira_en "nullable"
+        TIMESTAMP usada_en "nullable, NULL = no usada"
+    }
+
+    Proyecto {
+        UUID id PK
+        VARCHAR(150) nombre
+        TEXT descripcion "nullable"
+        VARCHAR(50) icono "nullable"
+        DATE fecha_inicio
+        DATE fecha_fin "nullable, CHECK >= fecha_inicio"
+        ENUM estado "ACTIVO, EN_PAUSA, COMPLETADO, ARCHIVADO"
+        UUID id_creador FK "RESTRICT"
+        UUID id_organizacion FK "CASCADE"
+        TIMESTAMP creado_en
+    }
+
+    UsuarioProyecto {
+        UUID id_usuario PK, FK "CASCADE"
+        UUID id_proyecto PK, FK "CASCADE"
+        ENUM rol_en_proyecto "RESPONSABLE, MIEMBRO"
+        TIMESTAMP unido_en
+    }
+
+    Canal {
+        UUID id PK
+        VARCHAR(100) nombre
+        ENUM tipo "GENERAL, PROYECTO"
+        UUID id_proyecto FK, UK "nullable, CASCADE, CHECK segun tipo"
+        UUID id_organizacion FK "CASCADE"
+        TIMESTAMP creado_en
+    }
+
+    Videollamada {
+        UUID id PK
+        UUID id_canal FK "CASCADE"
+        UUID id_iniciador FK "RESTRICT"
+        TIMESTAMP iniciada_en
+        TIMESTAMP finalizada_en "nullable"
+    }
+
+    Mensaje {
+        UUID id PK
+        TEXT contenido
+        ENUM tipo "TEXTO, AVISO_VIDEOLLAMADA"
+        BOOLEAN esta_fijado "default false"
+        BOOLEAN menciona_a_todos "menciones globales al canal o a todos"
+        UUID id_usuario FK "RESTRICT"
+        UUID id_canal FK "CASCADE"
+        UUID id_mensaje_padre FK "nullable, CASCADE, raiz del hilo"
+        UUID id_videollamada FK "nullable, SET NULL"
+        TIMESTAMP creado_en
+    }
+
+    Mencion {
+        UUID id_mensaje PK, FK "CASCADE"
+        UUID id_usuario PK, FK "CASCADE"
+    }
+
+    LecturaCanal {
+        UUID id_usuario PK, FK "CASCADE"
+        UUID id_canal PK, FK "CASCADE"
+        TIMESTAMP ultima_lectura_en "no leidos = mensajes posteriores"
+    }
+
+    Pizarra {
+        UUID id PK
+        UUID id_videollamada FK, UK "CASCADE"
+        UUID id_creador FK "RESTRICT"
+        TIMESTAMP creado_en
+    }
+
+    PaginaPizarra {
+        UUID id PK
+        UUID id_pizarra FK "CASCADE"
+        INT numero_pagina "UK compuesto con id_pizarra, CHECK >= 1"
+        VARCHAR(255) ruta_almacenamiento "JSON de Excalidraw"
+        TIMESTAMP actualizado_en
+    }
+
+    Tarea {
+        UUID id PK
+        VARCHAR(200) titulo
+        TEXT descripcion "nullable"
+        ENUM prioridad "ALTA, MEDIA, BAJA"
+        ENUM estado "POR_HACER, EN_CURSO, EN_REVISION, FINALIZADO"
+        INT orden_columna "posicion dentro de la columna Kanban"
+        DATETIME fecha_vencimiento "nullable"
+        UUID id_proyecto FK "CASCADE"
+        UUID id_creador FK "RESTRICT"
+        UUID id_mensaje_origen FK, UK "nullable, SET NULL"
+        TIMESTAMP creado_en
+        TIMESTAMP actualizado_en
+    }
+
+    TareaAsignada {
+        UUID id_tarea PK, FK "CASCADE"
+        UUID id_usuario PK, FK "CASCADE"
+        TIMESTAMP asignada_en
+    }
+
+    DependenciaTarea {
+        UUID id PK
+        UUID id_tarea_origen FK "CASCADE"
+        UUID id_tarea_destino FK "CASCADE"
+        ENUM tipo_linea "UNIDIRECCIONAL, BIDIRECCIONAL, PUNTEADA"
+        VARCHAR(100) etiqueta "nullable"
+    }
+
+    Lienzo {
+        UUID id PK
+        UUID id_proyecto FK, UK "CASCADE, un lienzo por proyecto"
+        VARCHAR(255) ruta_almacenamiento "JSON de layout: posiciones, notas, marcos"
+        TIMESTAMP actualizado_en
+    }
+
+    Carpeta {
+        UUID id PK
+        VARCHAR(150) nombre
+        UUID id_proyecto FK "CASCADE"
+        UUID id_carpeta_padre FK "nullable, CASCADE, NULL = raiz"
+        TIMESTAMP creado_en
+    }
+
+    Archivo {
+        UUID id PK
+        VARCHAR(255) nombre
+        VARCHAR(255) ruta_almacenamiento "ruta interna, se sirve por endpoint autenticado"
+        VARCHAR(100) tipo_mime
+        BIGINT tamano_bytes
+        UUID id_organizacion FK "CASCADE"
+        UUID id_proyecto FK "nullable, CASCADE, NULL = canal general"
+        UUID id_carpeta FK "nullable, SET NULL, NULL = raiz"
+        UUID id_mensaje FK "nullable, SET NULL, origen en el chat"
+        UUID id_subido_por FK "RESTRICT"
+        TIMESTAMP creado_en
+    }
+
+    Comunicado {
+        UUID id PK
+        VARCHAR(200) titulo
+        TEXT contenido
+        BOOLEAN esta_fijado "default false"
+        UUID id_autor FK "RESTRICT"
+        UUID id_organizacion FK "CASCADE"
+        TIMESTAMP creado_en
+    }
+
+    ComunicadoUsuario {
+        UUID id_comunicado PK, FK "CASCADE"
+        UUID id_usuario PK, FK "CASCADE"
+        TIMESTAMP leido_en "nullable"
+        TIMESTAMP archivado_en "nullable"
+    }
+
+    Notificacion {
+        UUID id PK
+        ENUM tipo "MENCION, MENSAJE, PROYECTO, VENCIMIENTO_TAREA, COMUNICADO"
+        UUID id_usuario FK "destinatario, CASCADE"
+        UUID id_mensaje FK "nullable, CASCADE"
+        UUID id_tarea FK "nullable, CASCADE"
+        UUID id_proyecto FK "nullable, CASCADE"
+        UUID id_comunicado FK "nullable, CASCADE"
+        BOOLEAN esta_leida "default false"
+        TIMESTAMP pospuesta_hasta "nullable"
+        TIMESTAMP creado_en
+    }
+
+    PreferenciaNotificacion {
+        UUID id_usuario PK, FK "CASCADE"
+        ENUM tipo PK "mismos valores que Notificacion.tipo"
+        BOOLEAN activada "default true"
+    }
+
+    RegistroAuditoria {
+        UUID id PK
+        UUID id_organizacion FK "CASCADE"
+        UUID id_actor FK "nullable, SET NULL"
+        VARCHAR(50) accion "ej. CAMBIO_ROL, BAJA_USUARIO, BORRADO_PROYECTO"
+        VARCHAR(50) entidad_tipo
+        UUID entidad_id "sin FK, el registro sobrevive al borrado"
+        JSON detalle "nullable"
+        TIMESTAMP creado_en
+    }
+
+    Organizacion ||--o{ Usuario : "tiene"
+    Organizacion ||--o{ Proyecto : "tiene"
+    Organizacion ||--o{ Canal : "tiene"
+    Organizacion ||--o{ Invitacion : "emite"
+    Organizacion ||--o{ Comunicado : "publica"
+    Organizacion ||--o{ Archivo : "almacena"
+    Organizacion ||--o{ RegistroAuditoria : "registra"
+
+    Usuario ||--o{ Invitacion : "genera"
+    Usuario |o--o| Invitacion : "se registra con"
+    Usuario ||--o{ Proyecto : "crea"
+    Usuario ||--o{ UsuarioProyecto : "participa en"
+    Proyecto ||--|{ UsuarioProyecto : "tiene miembros"
+
+    Proyecto |o--|| Canal : "tiene chat"
+    Canal ||--o{ Mensaje : "contiene"
+    Usuario ||--o{ Mensaje : "escribe"
+    Mensaje |o--o{ Mensaje : "respuestas del hilo"
+    Mensaje ||--o{ Mencion : "menciona"
+    Usuario ||--o{ Mencion : "es mencionado"
+    Usuario ||--o{ LecturaCanal : "lee"
+    Canal ||--o{ LecturaCanal : "es leido"
+
+    Canal ||--o{ Videollamada : "aloja"
+    Usuario ||--o{ Videollamada : "inicia"
+    Videollamada |o--o{ Mensaje : "se anuncia en"
+    Videollamada ||--o| Pizarra : "usa"
+    Usuario ||--o{ Pizarra : "crea"
+    Pizarra ||--|{ PaginaPizarra : "tiene paginas"
+
+    Proyecto ||--o{ Tarea : "contiene"
+    Usuario ||--o{ Tarea : "crea"
+    Tarea ||--o{ TareaAsignada : "se asigna a"
+    Usuario ||--o{ TareaAsignada : "tiene asignada"
+    Mensaje |o--o| Tarea : "origina"
+    Tarea ||--o{ DependenciaTarea : "origen de"
+    Tarea ||--o{ DependenciaTarea : "destino de"
+    Proyecto ||--o| Lienzo : "tiene"
+
+    Proyecto ||--o{ Carpeta : "organiza"
+    Carpeta |o--o{ Carpeta : "subcarpetas"
+    Proyecto |o--o{ Archivo : "contiene"
+    Carpeta |o--o{ Archivo : "agrupa"
+    Mensaje |o--o{ Archivo : "adjunta"
+    Usuario ||--o{ Archivo : "sube"
+
+    Usuario ||--o{ Comunicado : "publica"
+    Comunicado ||--o{ ComunicadoUsuario : "estado por usuario"
+    Usuario ||--o{ ComunicadoUsuario : "lee o archiva"
+    Usuario ||--o{ Notificacion : "recibe"
+    Mensaje |o--o{ Notificacion : "origina"
+    Tarea |o--o{ Notificacion : "origina"
+    Proyecto |o--o{ Notificacion : "origina"
+    Comunicado |o--o{ Notificacion : "origina"
+    Usuario ||--o{ PreferenciaNotificacion : "configura"
+    Usuario |o--o{ RegistroAuditoria : "realiza"

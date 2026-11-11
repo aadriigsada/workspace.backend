@@ -1,0 +1,475 @@
+openapi: 3.0.3
+info:
+  title: Unified Business Workspace API
+  version: 1.0.0
+  description: Especificación API-first para la plataforma corporativa de comunicación y gestión de proyectos.
+servers:
+  - url: /api/v1
+    description: Servidor de desarrollo API v1
+
+paths:
+  /auth/google:
+    get:
+      summary: Iniciar flujo de autenticación OAuth 2.0 con Google
+      tags: [Autenticación]
+      responses:
+        '302':
+          description: Redirección al proveedor OAuth.
+
+  /auth/microsoft/callback:
+    get:
+      summary: Callback de autenticación OAuth 2.0 con Microsoft
+      tags: [Autenticación]
+      parameters:
+        - in: query
+          name: code
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Autenticado correctamente. Devuelve tokens de acceso.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthSuccessResponse'
+        '401':
+          $ref: '#/components/responses/ErrorResponse'
+
+  /auth/refresh:
+    post:
+      summary: Refrescar token JWT antes de expiración
+      tags: [Autenticación]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refresh_token]
+              properties:
+                refresh_token:
+                  type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthSuccessResponse'
+
+  /auth/logout:
+    post:
+      summary: Cierre de sesión e invalidación de token JWT
+      tags: [Autenticación]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+
+  /invitations/{token}/accept:
+    post:
+      summary: Aceptar invitación e incorporarse a la organización (HU-02)
+      tags: [Invitaciones]
+      parameters:
+        - in: path
+          name: token
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                  example: "Carlos Gómez"
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthSuccessResponse'
+        '401':
+          $ref: '#/components/responses/ErrorResponse'
+
+  /projects:
+    get:
+      summary: Listar proyectos accesibles por el usuario
+      tags: [Proyectos]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [ACTIVE, PAUSED, COMPLETED, ARCHIVED]
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 10
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectListResponse'
+
+    post:
+      summary: Crear nuevo proyecto (HU-20)
+      tags: [Proyectos]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateProjectInput'
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SingleProjectResponse'
+
+  /projects/{id}/members:
+    get:
+      summary: Listar miembros asignados a un proyecto (HU-21)
+      tags: [Proyectos]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectMemberListResponse'
+
+  /channels/{id}/messages:
+    get:
+      summary: Obtener historial de mensajes de un canal con paginación por cursor (HU-04)
+      tags: [Chat]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - in: query
+          name: cursor
+          schema:
+            type: string
+            format: uuid
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageListCursorResponse'
+
+  /messages/{id}/convert-to-task:
+    post:
+      summary: Convertir mensaje de chat directamente en tarea (HU-25)
+      tags: [Tareas]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [project_id, title, priority]
+              properties:
+                project_id:
+                  type: string
+                  format: uuid
+                title:
+                  type: string
+                priority:
+                  type: string
+                  enum: [HIGH, MEDIUM, LOW]
+                due_date:
+                  type: string
+                  format: date-time
+                assignee_id:
+                  type: string
+                  format: uuid
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SingleTaskResponse'
+
+  /tasks/{id}/move:
+    put:
+      summary: Mover tarea entre columnas Kanban y reordenar (HU-24)
+      tags: [Tareas]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status, column_order]
+              properties:
+                status:
+                  type: string
+                  enum: [TODO, IN_PROGRESS, REVIEW, DONE]
+                column_order:
+                  type: integer
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SingleTaskResponse'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    AuthSuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            access_token:
+              type: string
+            refresh_token:
+              type: string
+            user:
+              type: object
+              properties:
+                id:
+                  type: string
+                  format: uuid
+                email:
+                  type: string
+                role:
+                  type: string
+                  enum: [ADMINISTRADOR, MANAGER, USUARIO]
+
+    CreateProjectInput:
+      type: object
+      required: [name, start_date]
+      properties:
+        name:
+          type: string
+          example: "Migración de Servidores"
+        description:
+          type: string
+        start_date:
+          type: string
+          format: date
+        end_date:
+          type: string
+          format: date
+
+    SingleProjectResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+            name:
+              type: string
+            status:
+              type: string
+              example: "ACTIVE"
+            created_at:
+              type: string
+              format: date-time
+
+    ProjectListResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/SingleProjectResponse/properties/data'
+        meta:
+          type: object
+          properties:
+            page:
+              type: integer
+            limit:
+              type: integer
+            total_items:
+              type: integer
+            total_pages:
+              type: integer
+
+    ProjectMemberListResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: array
+          items:
+            type: object
+            properties:
+              user_id:
+                type: string
+                format: uuid
+              name:
+                type: string
+              email:
+                type: string
+              project_role:
+                type: string
+                enum: [RESPONSABLE, MIEMBRO]
+
+    MessageListCursorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+                format: uuid
+              content:
+                type: string
+              user_id:
+                type: string
+                format: uuid
+              created_at:
+                type: string
+                format: date-time
+        meta:
+          type: object
+          properties:
+            next_cursor:
+              type: string
+              format: uuid
+              nullable: true
+            has_more:
+              type: boolean
+
+    SingleTaskResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+            title:
+              type: string
+            status:
+              type: string
+              enum: [TODO, IN_PROGRESS, REVIEW, DONE]
+            column_order:
+              type: integer
+            source_message_id:
+              type: string
+              format: uuid
+              nullable: true
+
+  responses:
+    ErrorResponse:
+      description: Respuesta de error estructurada
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success:
+                type: boolean
+                example: false
+              error:
+                type: object
+                properties:
+                  code:
+                    type: string
+                    example: "INVALID_PAYLOAD"
+                  message:
+                    type: string
+                    example: "Error en los datos suministrados"
+                  details:
+                    type: array
+                    items:
+                      type: object
+                  timestamp:
+                    type: string
+                    format: date-time
